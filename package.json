@@ -1,6 +1,6 @@
 {
   "name": "planer",
-  "version": "1.0.1",
+  "version": "1.0.4",
   "description": "Planificador Universitario",
   "main": "main.js",
   "scripts": {
@@ -24,9 +24,12 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "TU_USUARIO_GITHUB",
+        "owner": "kidaa2020",
         "repo": "planer"
       }
     ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2"
   }
 }

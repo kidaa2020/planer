@@ -1,6 +1,9 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, Notification } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
+
+// Intervalo en ms para revisar tareas
+const CHECK_INTERVAL = 60 * 1000; // 1 minuto
 
 function createWindow () {
   const win = new BrowserWindow({
@@ -9,6 +12,29 @@ function createWindow () {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js')
     }
+  });
+
+  // Revisar tareas periódicamente y mostrar notificaciones
+  win.webContents.once('dom-ready', () => {
+    win.webContents.executeJavaScript(`
+      setInterval(() => {
+        const stateRaw = localStorage.getItem("planificador:state");
+        const state = stateRaw ? JSON.parse(stateRaw) : { events: [] };
+        const now = new Date();
+
+        state.events.forEach(ev => {
+          if (!ev.notified && new Date(ev.date) <= now) {
+            new Notification({
+              title: "Tarea pendiente",
+              body: ev.title + " vence hoy"
+            }).show();
+            ev.notified = true;
+          }
+        });
+
+        localStorage.setItem("planificador:state", JSON.stringify(state));
+      }, ${CHECK_INTERVAL});
+    `);
   });
 
   win.loadFile('index.html');
