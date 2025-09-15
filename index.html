@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Planificador Universitario — App</title>
+
+  <!-- Bootstrap + FontAwesome -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+
+  <style>
+    :root{
+      --primary: #4361ee; --accent: #3a0ca3; --success: #4cc9f0; --danger: #f72585;
+      --bg: #f5f7fa; --muted:#6c757d;
+    }
+    html,body{height:100%}
+    body{font-family:Inter, "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial; background:var(--bg); margin:0; color:#222}
+    /* Layout */
+    .app-shell {display:flex; height:100vh; overflow:hidden;}
+    .sidebar {
+      display: none;
+      width:260px; background:linear-gradient(180deg,var(--primary),var(--accent)); color:#fff;
+      padding:18px; box-sizing:border-box; flex-shrink:0; display:flex; flex-direction:column;
+    }
+    .sidebar .brand{font-weight:700; font-size:18px; display:flex; gap:10px; align-items:center}
+    .sidebar .nav{margin-top:18px; flex:1; overflow:auto}
+    .sidebar .nav .nav-link{color:rgba(255,255,255,0.9); border-radius:8px; margin-bottom:6px}
+    .sidebar .nav .nav-link.active{background:rgba(255,255,255,0.08); color:#fff}
+    .sidebar .courses {margin-top:10px}
+    .sidebar .course-item{display:flex;align-items:center;gap:10px;padding:6px;border-radius:6px;color:#fff}
+    .content {
+      flex:1; display:flex; flex-direction:column; overflow:hidden;
+    }
+    /* Topbar */
+    .topbar #filter-course {
+    min-width: 160px;
+    }
+
+    .topbar {height:64px; display:flex; align-items:center; justify-content:space-between; padding:10px 18px; background:#fff; border-bottom:1px solid #e8eaef}
+    .topbar .controls{display:flex;gap:10px;align-items:center;}
+    /* main area */
+    .main {flex:1; overflow:auto; padding:18px;}
+    .card-calendar {padding:12px; background:#fff; border-radius:10px; box-shadow:0 6px 18px rgba(17,24,39,0.06)}
+    /* Month grid */
+    .month-grid {display:grid; grid-template-columns:repeat(7,1fr); gap:8px}
+    .month-cell {min-height:120px; border-radius:8px; border:1px solid #e6e9ef; background:#fff; position:relative; overflow:hidden}
+    .month-cell .date-num {position:absolute; top:6px; right:8px; font-weight:600; color:var(--muted)}
+    .month-cell .events {padding:26px 8px 8px 8px; max-height:88px; overflow:auto}
+    .event-pill{display:inline-block;padding:4px 8px;border-radius:6px;font-size:12px;margin:3px 3px 3px 0;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+    /* Week view */
+    .week-wrapper{display:flex; gap:8px}
+    .week-day{
+      flex:1; background:#fff; border-radius:8px; border:1px solid #e6e9ef; min-height:260px; position:relative; padding-top:36px;
+    }
+    .week-day .day-header{position:absolute; top:6px; left:10px; font-weight:700; color:var(--muted)}
+    .week-events{position:relative;padding:8px; height:100%;}
+    .week-event{
+      position:relative; border-radius:6px; padding:6px 8px; color:#fff; margin-bottom:6px; font-size:12px;
+      box-shadow:0 4px 8px rgba(17,24,39,0.06);
+    }
+    /* Event column stacking in week: use inline-block columns - computed in JS */
+    .week-column{display:inline-block; vertical-align:top; width:100%; padding-right:6px}
+    /* Day timeline */
+    .day-timeline {display:flex; gap:12px}
+    .timeline-hours {width:70px}
+    .timeline-hours .hour{height:48px; line-height:48px; font-size:12px; color:var(--muted); text-align:right; padding-right:8px}
+    .timeline-body {flex:1; background:#fff; border-radius:8px; padding:12px; border:1px solid #e6e9ef; position:relative; min-height:48px}
+    .timeline-event{position:absolute; left:8%; right:8%; border-radius:6px; padding:6px 8px; color:#fff; font-size:13px; box-shadow:0 6px 18px rgba(17,24,39,0.08)}
+    /* tasks / lists */
+    .list-small .list-group-item {display:flex; justify-content:space-between; align-items:center}
+    .badge-course {display:inline-block; padding:4px 8px; border-radius:6px; color:#fff; font-size:12px}
+    /* utility */
+    .muted {color:#6c757d}
+    .search-input{width:300px}
+    /* responsiveness */
+    @media (max-width:1000px){
+      .sidebar{width:64px;padding:10px}
+      .sidebar .brand span{display:none}
+      .sidebar .nav .nav-text{display:none}
+      .topbar .search-input{display:none}
+    }
+    /* --- Animaciones tipo Apple --- */
+   .view {
+   opacity: 0;
+   transform: translateY(20px);
+   transition: opacity 0.35s ease, transform 0.35s ease;
+   }
+   .view.active {
+   opacity: 1;
+   transform: translateY(0);
+   }
+
+   /* Animación suave para el sidebar */
+   .sidebar {
+   transition: all 0.4s cubic-bezier(.25,.8,.25,1);
+   }
+   .sidebar .nav-link {
+   transition: background 0.25s ease, transform 0.25s ease;
+   }
+   .sidebar .nav-link:hover {
+   transform: translateX(4px);
+   }
+
+   /* Aparición de tarjetas */
+   .card-calendar {
+   animation: cardFadeIn 0.45s ease both;
+   }
+   @keyframes cardFadeIn {
+   from { opacity: 0; transform: scale(0.96); }
+   to   { opacity: 1; transform: scale(1); }
+   }
+
+   /* Botones con efecto “tap” */
+   button, .btn {
+   transition: transform 0.15s ease, box-shadow 0.2s ease;
+   }
+   button:active, .btn:active {
+   transform: scale(0.96);
+   box-shadow: 0 2px 8px rgba(0,0,0,0.2) inset;
+   }
+
+   /* Pastillas de evento */
+   .event-pill, .week-event, .timeline-event {
+   transition: transform 0.25s ease, box-shadow 0.25s ease;
+   cursor: pointer;
+   }
+   .event-pill:hover, .week-event:hover, .timeline-event:hover {
+   transform: scale(1.03);
+   box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+   }
+ 
+     
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><i class="fas fa-graduation-cap fa-lg"></i><span>Planificador</span></div>
+
+      <nav class="nav flex-column mt-3">
+        <a class="nav-link active view-switch" data-view="month" href="#"><i class="fa-solid fa-calendar-days me-2"></i><span class="nav-text">Mes</span></a>
+        <a class="nav-link view-switch" data-view="week" href="#"><i class="fa-solid fa-calendar-week me-2"></i><span class="nav-text">Semana</span></a>
+        <a class="nav-link view-switch" data-view="day" href="#"><i class="fa-solid fa-calendar-day me-2"></i><span class="nav-text">Día</span></a>
+        <a class="nav-link view-switch" data-view="tasks" href="#"><i class="fa-solid fa-list-check me-2"></i><span class="nav-text">Tareas</span></a>
+        <a class="nav-link view-switch" data-view="courses" href="#"><i class="fa-solid fa-book me-2"></i><span class="nav-text">Materias</span></a>
+      </nav>
+
+      <div class="mt-auto">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <small class="text-white-50">Materias</small>
+          <button class="btn btn-sm btn-outline-light" id="add-course-btn" title="Agregar materia"><i class="fa-solid fa-plus"></i></button>
+        </div>
+        <div class="courses" id="sidebar-courses" style="max-height:220px; overflow:auto"></div>
+
+        <div class="mt-3 d-flex gap-2">
+          <button class="btn btn-light btn-sm w-100" id="export-btn"><i class="fa-solid fa-file-export"></i> Export</button>
+          <button class="btn btn-light btn-sm w-100" id="import-btn"><i class="fa-solid fa-file-import"></i> Import</button>
+        </div>
+        <div class="mt-3 text-center small text-white-50">Hecho para usar con Electron</div>
+      </div>
+    </aside>
+
+    <div class="content">
+      <div class="topbar">
+        <div class="d-flex align-items-center gap-2">
+          <div class="btn-group me-2">
+            <button class="btn btn-outline-secondary btn-sm" id="prev-btn"><i class="fa-solid fa-chevron-left"></i></button>
+            <button class="btn btn-outline-secondary btn-sm" id="today-btn">Hoy</button>
+            <button class="btn btn-outline-secondary btn-sm" id="next-btn"><i class="fa-solid fa-chevron-right"></i></button>
+          </div>
+          <h5 id="period-label" class="mb-0">Mes Año</h5>
+        </div>
+
+        <div class="controls">
+          <input class="form-control form-control-sm search-input" id="search-input" placeholder="Buscar eventos..." />
+          <select class="form-select form-select-sm" id="filter-course" style="width:auto;">
+            <option value="">Todas las materias</option>
+          </select>
+          <select class="form-select form-select-sm" id="filter-type" style="width:auto;">
+            <option value="">Todos los tipos</option>
+            <option value="task">Tarea</option><option value="exam">Examen</option><option value="study">Estudio</option><option value="work">Trabajo</option><option value="other">Otro</option>
+          </select>
+          <button class="btn btn-primary btn-sm" id="new-event-btn"><i class="fa-solid fa-plus me-1"></i> Nueva</button>
+        </div>
+      </div>
+
+      <main class="main">
+        <!-- Month -->
+        <section id="view-month" class="view card-calendar">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="muted">Vista mensual</div>
+            <div class="small muted">Inicio de semana: <select id="week-start" class="form-select form-select-sm d-inline-block" style="width:auto"><option value="1">Lunes</option><option value="0">Domingo</option></select></div>
+          </div>
+          <div class="month-grid mb-3" id="month-grid">
+            <!-- celdas generadas -->
+          </div>
+        </section>
+
+        <!-- Week -->
+        <section id="view-week" class="view" style="display:none">
+          <div class="card-calendar p-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div class="muted">Vista semanal</div>
+              <div class="small muted">Arrastra para mover (próximas versiones)</div>
+            </div>
+
+            <div class="week-wrapper" id="week-wrapper">
+              <!-- dias generados -->
+            </div>
+          </div>
+        </section>
+
+        <!-- Day -->
+        <section id="view-day" class="view" style="display:none">
+          <div class="card-calendar p-3">
+            <div class="mb-2"><strong id="day-label">Día</strong></div>
+            <div class="day-timeline">
+              <div class="timeline-hours" id="timeline-hours"></div>
+              <div class="timeline-body" id="timeline-body"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tasks -->
+        <section id="view-tasks" class="view" style="display:none">
+          <div class="card-calendar p-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div><strong>Tareas</strong> (<span id="tasks-count">0</span>)</div>
+              <div>
+                <button class="btn btn-sm btn-outline-secondary" id="clear-completed">Borrar completadas</button>
+              </div>
+            </div>
+            <ul class="list-group list-small" id="tasks-list"></ul>
+          </div>
+        </section>
+
+        <!-- Courses -->
+        <section id="view-courses" class="view" style="display:none">
+          <div class="card-calendar p-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div><strong>Materias</strong></div>
+              <div><button class="btn btn-sm btn-primary" id="new-course-btn"><i class="fa-solid fa-plus me-1"></i> Nueva</button></div>
+            </div>
+            <ul class="list-group" id="courses-list"></ul>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- Modales: Event / Course / Confirm / Import -->
+  <div class="modal fade" id="modalEvent" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="modalEventTitle">Nueva actividad</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <form id="form-event">
+        <input type="hidden" id="event-id"/>
+        <div class="row g-2">
+          <div class="col-md-6"><label class="form-label">Título</label><input id="event-title" class="form-control" required></div>
+          <div class="col-md-3"><label class="form-label">Tipo</label>
+            <select id="event-type" class="form-select"><option value="task">Tarea</option><option value="exam">Examen</option><option value="study">Estudio</option><option value="work">Trabajo</option><option value="other">Otro</option></select>
+          </div>
+          <div class="col-md-3"><label class="form-label">Materia</label>
+            <select id="event-course" class="form-select"><option value="">— Ninguna —</option></select>
+          </div>
+
+          <div class="col-md-6"><label class="form-label">Fecha inicio</label><input id="event-start" type="datetime-local" class="form-control" required></div>
+          <div class="col-md-6"><label class="form-label">Fecha fin</label><input id="event-end" type="datetime-local" class="form-control"></div>
+
+          <div class="col-12"><label class="form-label">Descripción</label><textarea id="event-desc" class="form-control" rows="3"></textarea></div>
+
+          <div class="col-6 form-check">
+            <input class="form-check-input" type="checkbox" id="event-complete"><label class="form-check-label" for="event-complete">Marcar como completada</label>
+          </div>
+          <div class="col-6 text-end">
+            <label class="form-label">Recordatorio (min antes)</label>
+            <input class="form-control form-control-sm" id="event-reminder" type="number" min="0" value="30"/>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger me-auto" id="delete-event-btn" style="display:none"><i class="fa-solid fa-trash"></i> Borrar</button>
+      <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+      <button class="btn btn-primary" id="save-event-btn">Guardar</button>
+    </div>
+  </div></div></div>
+
+  <div class="modal fade" id="modalCourse" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">Nueva materia</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <form id="form-course">
+        <input type="hidden" id="course-id"/>
+        <div class="mb-2"><label class="form-label">Nombre</label><input id="course-name" class="form-control" required></div>
+        <div class="mb-2"><label class="form-label">Profesor</label><input id="course-prof" class="form-control"></div>
+        <div class="mb-2"><label class="form-label">Color</label><input id="course-color" class="form-control form-control-color" type="color" value="#563d7c"></div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger me-auto" id="delete-course-btn" style="display:none">Borrar</button>
+      <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+      <button class="btn btn-primary" id="save-course-btn">Guardar</button>
+    </div>
+  </div></div></div>
+
+  <input type="file" id="import-file" accept="application/json" style="display:none"/>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+  (function(){
+    /* ---------- Helpers ---------- */
+    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+    const fmtDate = d => new Date(d).toLocaleString();
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+    /* ---------- Storage ---------- */
+    const STORAGE_KEY = 'planificador:data:v1';
+    function loadState(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : { courses: [], events: [] };
+      }catch(e){ return { courses: [], events: [] } }
+    }
+    function saveState(state){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+    let state = loadState();
+
+    /* ---------- DOM refs ---------- */
+    const views = { month: document.getElementById('view-month'), week: document.getElementById('view-week'), day: document.getElementById('view-day'), tasks: document.getElementById('view-tasks'), courses: document.getElementById('view-courses') };
+    const monthGrid = document.getElementById('month-grid');
+    const weekWrapper = document.getElementById('week-wrapper');
+    const timelineHours = document.getElementById('timeline-hours'), timelineBody = document.getElementById('timeline-body');
+    const tasksList = document.getElementById('tasks-list'), tasksCount = document.getElementById('tasks-count');
+    const coursesList = document.getElementById('courses-list'), sidebarCourses = document.getElementById('sidebar-courses');
+    const filterCourse = document.getElementById('filter-course'), filterType = document.getElementById('filter-type'), searchInput = document.getElementById('search-input');
+    const periodLabel = document.getElementById('period-label');
+    const weekStartSelect = document.getElementById('week-start');
+
+    /* Modals */
+    const modalEvent = new bootstrap.Modal(document.getElementById('modalEvent'));
+    const modalCourse = new bootstrap.Modal(document.getElementById('modalCourse'));
+
+    /* Form fields */
+    const formEvent = {
+      id: document.getElementById('event-id'),
+      title: document.getElementById('event-title'),
+      type: document.getElementById('event-type'),
+      course: document.getElementById('event-course'),
+      start: document.getElementById('event-start'),
+      end: document.getElementById('event-end'),
+      desc: document.getElementById('event-desc'),
+      reminder: document.getElementById('event-reminder'),
+      complete: document.getElementById('event-complete'),
+      titleLabel: document.getElementById('modalEventTitle'),
+      deleteBtn: document.getElementById('delete-event-btn'),
+      saveBtn: document.getElementById('save-event-btn')
+    };
+    const formCourse = {
+      id: document.getElementById('course-id'),
+      name: document.getElementById('course-name'),
+      prof: document.getElementById('course-prof'),
+      color: document.getElementById('course-color'),
+      deleteBtn: document.getElementById('delete-course-btn'),
+      saveBtn: document.getElementById('save-course-btn')
+    };
+
+    /* View state */
+    let view = 'month';
+    let currentDate = new Date();
+    currentDate.setHours(0,0,0,0);
+
+    /* ---------- Utilities ---------- */
+    function syncState(){ saveState(state); renderAll(); }
+    function addCourse(obj){ obj.id = uid(); state.courses.push(obj); syncState(); }
+    function updateCourse(id, payload){ const i = state.courses.findIndex(c=>c.id===id); if(i>=0) state.courses[i] = {...state.courses[i], ...payload}; syncState(); }
+    function deleteCourse(id){ state.courses = state.courses.filter(c=>c.id!==id); state.events = state.events.map(e => e.course===id ? {...e, course: ''} : e); syncState(); }
+
+    function addEvent(ev){ ev.id = uid(); state.events.push(ev); syncState(); }
+    function updateEvent(id, payload){ const i = state.events.findIndex(e=>e.id===id); if(i>=0) state.events[i] = {...state.events[i], ...payload}; syncState(); }
+    function deleteEvent(id){ state.events = state.events.filter(e=>e.id!==id); syncState(); }
+
+    function getCourseColor(courseId){
+      const c = state.courses.find(x=>x.id===courseId);
+      return c ? c.color : '#6c757d';
+    }
+
+    /* ---------- Renderers ---------- */
+    function renderAll(){
+      renderPeriodLabel();
+      renderCoursesUI();
+      renderMonth();
+      renderWeek();
+      renderDay();
+      renderTasks();
+      populateFilters();
+    }
+
+    function renderPeriodLabel(){
+      const month = currentDate.toLocaleString('es-ES',{month:'long', year:'numeric'});
+      periodLabel.textContent = month;
+    }
+
+    /* MONTH */
+    function renderMonth(){
+      monthGrid.innerHTML = '';
+      const ws = parseInt(weekStartSelect.value,10); // 1 = Monday, 0 = Sunday
+      const year = currentDate.getFullYear(), month = currentDate.getMonth();
+      const firstOfMonth = new Date(year, month, 1);
+      const lastOfMonth = new Date(year, month+1, 0);
+      // calculate start cell (start at ws)
+      let startDate = new Date(firstOfMonth);
+      const dayOfWeek = startDate.getDay(); // 0..6 Sun..Sat
+      let diff = (dayOfWeek - ws + 7) % 7;
+      startDate.setDate(startDate.getDate() - diff);
+
+      const totalCells = 42; // 6 weeks grid
+      let d = new Date(startDate);
+      for(let i=0;i<totalCells;i++){
+        const cell = document.createElement('div'); cell.className = 'month-cell';
+        const dateNum = document.createElement('div'); dateNum.className='date-num'; dateNum.textContent = d.getDate();
+        const eventsDiv = document.createElement('div'); eventsDiv.className='events';
+        // style muted for other months
+        if(d.getMonth() !== month) cell.style.opacity = 0.45;
+        // highlight today
+        const today = new Date(); today.setHours(0,0,0,0);
+        if(d.getTime() === today.getTime()) cell.style.boxShadow = '0 0 0 3px rgba(67,97,238,0.08)';
+
+        // fetch events for that day
+        const dayEvents = state.events.filter(ev => {
+          const s = new Date(ev.start); const e = ev.end ? new Date(ev.end) : s;
+          // event intersects date
+          const dayStart = new Date(d); dayStart.setHours(0,0,0,0);
+          const dayEnd = new Date(d); dayEnd.setHours(23,59,59,999);
+          return (s <= dayEnd && e >= dayStart) && passesFilters(ev);
+        }).sort((a,b)=> new Date(a.start)-new Date(b.start));
+
+        dayEvents.slice(0,4).forEach(ev=>{
+          const pill = document.createElement('div');
+          pill.className = 'event-pill';
+          pill.style.background = getCourseColor(ev.course);
+          pill.textContent = ev.title;
+          pill.title = ev.title;
+          pill.dataset.id = ev.id;
+          pill.addEventListener('click', e => openEventModal(ev.id));
+          eventsDiv.appendChild(pill);
+        });
+        if(dayEvents.length>4){
+          const more = document.createElement('div');
+          more.className = 'muted small'; more.textContent = `+${dayEvents.length-4} más`;
+          eventsDiv.appendChild(more);
+        }
+
+        cell.appendChild(dateNum); cell.appendChild(eventsDiv);
+        cell.addEventListener('dblclick', ()=> openQuickCreate(d)); // quick add
+        monthGrid.appendChild(cell);
+        d.setDate(d.getDate()+1);
+      }
+    }
+
+    /* WEEK */
+    function renderWeek(){
+      weekWrapper.innerHTML = '';
+      const ws = parseInt(weekStartSelect.value,10);
+      // find monday or sunday of current week
+      const cd = new Date(currentDate);
+      const cwDay = cd.getDay(); //0..6
+      const diff = (cwDay - ws + 7) % 7;
+      const weekStart = new Date(cd); weekStart.setDate(cd.getDate() - diff);
+      const days = [];
+      for(let i=0;i<7;i++){
+        const d = new Date(weekStart); d.setDate(weekStart.getDate()+i); days.push(d);
+      }
+
+      days.forEach(d=>{
+        const col = document.createElement('div'); col.className='week-day';
+        const header = document.createElement('div'); header.className='day-header'; header.textContent = d.toLocaleDateString('es-ES',{weekday:'short', day:'numeric'});
+        const eventsWrap = document.createElement('div'); eventsWrap.className='week-events';
+        // collect day's events
+        const dayEvents = state.events.filter(ev => {
+          const s = new Date(ev.start); const e = ev.end ? new Date(ev.end) : s;
+          const dayStart = new Date(d); dayStart.setHours(0,0,0,0);
+          const dayEnd = new Date(d); dayEnd.setHours(23,59,59,999);
+          return (s <= dayEnd && e >= dayStart) && passesFilters(ev);
+        }).sort((a,b)=> new Date(a.start)-new Date(b.start));
+
+        // Place events in columns to avoid overlap
+        const columns = []; // array of arrays for columns
+        dayEvents.forEach(ev=>{
+          const s = new Date(ev.start).getTime();
+          const e = ev.end ? new Date(ev.end).getTime() : s + 30*60*1000;
+          // find first column where it doesn't overlap with last event
+          let placed = false;
+          for(let ci=0; ci<columns.length; ci++){
+            const colArr = columns[ci];
+            const last = colArr[colArr.length-1];
+            const lastEnd = last.end;
+            if(s >= lastEnd){
+              colArr.push({ ev, start:s, end:e });
+              placed = true; break;
+            }
+          }
+          if(!placed){
+            columns.push([{ ev, start:s, end:e }]);
+          }
+        });
+
+        // For each column, create a container with reduced width so multiple columns fit
+        const colCount = columns.length || 1;
+        columns.forEach((colArr, idx)=>{
+          const colDiv = document.createElement('div'); colDiv.className='week-column';
+          // set width percent
+          colDiv.style.width = (100/colCount) + '%';
+          colArr.forEach(item=>{
+            const ev = item.ev;
+            const div = document.createElement('div'); div.className='week-event';
+            div.style.background = getCourseColor(ev.course);
+            div.textContent = ev.title + (ev.course ? (' • ' + (state.courses.find(c=>c.id===ev.course)?.name || '')) : '');
+            div.title = (ev.desc || '') + '\\n' + fmtDate(ev.start) + (ev.end ? ' - ' + fmtDate(ev.end) : '');
+            div.dataset.id = ev.id;
+            div.addEventListener('click', ()=> openEventModal(ev.id));
+            colDiv.appendChild(div);
+          });
+          eventsWrap.appendChild(colDiv);
+        });
+
+        col.appendChild(header); col.appendChild(eventsWrap);
+        weekWrapper.appendChild(col);
+      });
+    }
+
+    /* DAY */
+    function renderDay(){
+      timelineHours.innerHTML = '';
+      timelineBody.innerHTML = '';
+      const day = new Date(currentDate);
+      document.getElementById('day-label').textContent = day.toLocaleDateString('es-ES',{weekday:'long', day:'numeric', month:'long', year:'numeric'});
+
+      // hours 0..23
+      for(let h=0; h<24; h++){
+        const hr = document.createElement('div'); hr.className='hour'; hr.textContent = String(h).padStart(2,'0') + ':00';
+        timelineHours.appendChild(hr);
+      }
+      // container height: 24*48px => compute coordinates
+      const slotHeight = 48; const dayTop = 0;
+      const dayEvents = state.events.filter(ev=>{
+        const s = new Date(ev.start); const e = ev.end ? new Date(ev.end) : s;
+        const dayStart = new Date(day); dayStart.setHours(0,0,0,0);
+        const dayEnd = new Date(day); dayEnd.setHours(23,59,59,999);
+        return (s <= dayEnd && e >= dayStart) && passesFilters(ev);
+      }).sort((a,b)=> new Date(a.start)-new Date(b.start));
+
+      dayEvents.forEach(ev=>{
+        const s = new Date(ev.start);
+        const e = ev.end ? new Date(ev.end) : new Date(s.getTime() + 30*60*1000);
+        const startMinutes = s.getHours()*60 + s.getMinutes();
+        const endMinutes = e.getHours()*60 + e.getMinutes();
+        const top = (startMinutes/60)*slotHeight;
+        const height = Math.max(28, ((endMinutes - startMinutes)/60)*slotHeight); // min height
+        const div = document.createElement('div'); div.className='timeline-event';
+        div.style.top = top + 'px';
+        div.style.height = height + 'px';
+        div.style.background = getCourseColor(ev.course);
+        div.style.left = '8%'; div.style.right = '8%';
+        div.innerHTML = `<strong>${ev.title}</strong><div style="font-size:12px">${s.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}${ev.end ? ' - ' + e.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : ''}</div>`;
+        div.title = ev.desc || '';
+        div.dataset.id = ev.id;
+        div.addEventListener('click', ()=> openEventModal(ev.id));
+        timelineBody.appendChild(div);
+      });
+
+      // set timelineBody height
+      timelineBody.style.height = (24*slotHeight) + 'px';
+    }
+
+    /* TASKS */
+    function renderTasks(){
+      tasksList.innerHTML = '';
+      const tasks = state.events.filter(e=> e.type === 'task' && passesFilters(e));
+      tasksCount.textContent = tasks.length;
+      tasks.forEach(ev=>{
+        const li = document.createElement('li'); li.className='list-group-item';
+        const left = document.createElement('div'); left.style.display='flex'; left.style.alignItems='center'; left.style.gap='8px';
+        const chk = document.createElement('input'); chk.type='checkbox'; chk.checked = !!ev.completed;
+        chk.addEventListener('change', ()=> { updateEvent(ev.id, { completed: chk.checked }); });
+        left.appendChild(chk);
+        const title = document.createElement('div'); title.innerHTML = `<strong>${ev.title}</strong><div class="muted small">${new Date(ev.start).toLocaleString()}</div>`;
+        left.appendChild(title);
+        const right = document.createElement('div');
+        const btn = document.createElement('button'); btn.className='btn btn-sm btn-outline-secondary'; btn.innerHTML = '<i class="fa-solid fa-pen"></i>';
+        btn.addEventListener('click', ()=> openEventModal(ev.id));
+        right.appendChild(btn);
+        li.appendChild(left); li.appendChild(right);
+        tasksList.appendChild(li);
+      });
+    }
+
+    /* COURSES UI */
+    function renderCoursesUI(){
+      coursesList.innerHTML = ''; sidebarCourses.innerHTML = '';
+      state.courses.forEach(c=>{
+        const li = document.createElement('li'); li.className='list-group-item d-flex justify-content-between align-items-center';
+        li.innerHTML = `<div><span class="badge-course" style="background:${c.color};margin-right:10px">${c.name[0]||'M'}</span><strong>${c.name}</strong><div class="muted small">${c.prof||''}</div></div>`;
+        const actions = document.createElement('div');
+        const edit = document.createElement('button'); edit.className='btn btn-sm btn-outline-secondary me-1'; edit.innerHTML='<i class="fa-solid fa-pen"></i>';
+        edit.addEventListener('click', ()=> openCourseModal(c.id));
+        const del = document.createElement('button'); del.className='btn btn-sm btn-outline-danger'; del.innerHTML='<i class="fa-solid fa-trash"></i>';
+        del.addEventListener('click', ()=> { if(confirm('Borrar materia?')) deleteCourse(c.id); });
+        actions.appendChild(edit); actions.appendChild(del);
+        li.appendChild(actions);
+        coursesList.appendChild(li);
+
+        const sidebarItem = document.createElement('div'); sidebarItem.className='course-item';
+        sidebarItem.innerHTML = `<div style="width:14px;height:14px;border-radius:4px;background:${c.color}"></div><div style="flex:1">${c.name}</div>`;
+        sidebarItem.addEventListener('click', ()=> { filterCourse.value = c.id; renderAll(); });
+        sidebarCourses.appendChild(sidebarItem);
+      });
+    }
+
+    function populateFilters(){
+      // courses select
+      filterCourse.innerHTML = '<option value="">Todas las materias</option>';
+      formEvent.course.innerHTML = '<option value="">— Ninguna —</option>';
+      state.courses.forEach(c=>{
+        const opt = document.createElement('option'); opt.value = c.id; opt.textContent = c.name; filterCourse.appendChild(opt);
+        const opt2 = opt.cloneNode(true); formEvent.course.appendChild(opt2);
+      });
+    }
+
+    /* ---------- Filters & Search ---------- */
+    function passesFilters(ev){
+      // course filter
+      if(filterCourse.value && ev.course !== filterCourse.value) return false;
+      if(filterType.value && ev.type !== filterType.value) return false;
+      if(searchInput.value){
+        const q = searchInput.value.toLowerCase();
+        if(!(ev.title.toLowerCase().includes(q) || (ev.desc||'').toLowerCase().includes(q))) return false;
+      }
+      return true;
+    }
+
+    /* ---------- Interaction: open modals ---------- */
+    function openQuickCreate(date){
+      // open event modal with date prefilled
+      formEvent.id.value = '';
+      formEvent.title.value = '';
+      formEvent.type.value = 'task';
+      formEvent.course.value = '';
+      // set start = date at 10:00
+      const s = new Date(date); s.setHours(10,0,0,0);
+      formEvent.start.value = toLocalDatetimeInput(s);
+      formEvent.end.value = '';
+      formEvent.desc.value = '';
+      formEvent.reminder.value = 30;
+      formEvent.complete.checked = false;
+      formEvent.titleLabel.textContent = 'Crear actividad';
+      formEvent.deleteBtn.style.display = 'none';
+      modalEvent.show();
+    }
+
+    function openEventModal(id){
+      const ev = state.events.find(x=>x.id===id);
+      if(!ev) return;
+      formEvent.id.value = ev.id;
+      formEvent.title.value = ev.title;
+      formEvent.type.value = ev.type;
+      formEvent.course.value = ev.course || '';
+      formEvent.start.value = toLocalDatetimeInput(new Date(ev.start));
+      formEvent.end.value = ev.end ? toLocalDatetimeInput(new Date(ev.end)) : '';
+      formEvent.desc.value = ev.desc || '';
+      formEvent.reminder.value = ev.reminder ?? 30;
+      formEvent.complete.checked = !!ev.completed;
+      formEvent.titleLabel.textContent = 'Editar actividad';
+      formEvent.deleteBtn.style.display = 'inline-block';
+      modalEvent.show();
+    }
+
+    function openCreateEventModal(){
+      formEvent.id.value = '';
+      formEvent.title.value = '';
+      formEvent.type.value = 'task';
+      formEvent.course.value = '';
+      formEvent.start.value = toLocalDatetimeInput(new Date());
+      formEvent.end.value = '';
+      formEvent.desc.value = '';
+      formEvent.reminder.value = 30;
+      formEvent.complete.checked = false;
+      formEvent.titleLabel.textContent = 'Nueva actividad';
+      formEvent.deleteBtn.style.display = 'none';
+      modalEvent.show();
+    }
+
+    function openCourseModal(id){
+      if(!id){
+        formCourse.id.value = ''; formCourse.name.value=''; formCourse.prof.value=''; formCourse.color.value='#563d7c'; formCourse.deleteBtn.style.display='none';
+      } else {
+        const c = state.courses.find(x=>x.id===id); if(!c) return;
+        formCourse.id.value = c.id; formCourse.name.value = c.name; formCourse.prof.value = c.prof || ''; formCourse.color.value = c.color || '#563d7c'; formCourse.deleteBtn.style.display='inline-block';
+      }
+      modalCourse.show();
+    }
+
+    /* ---------- Save / Delete handlers ---------- */
+    document.getElementById('save-event-btn').addEventListener('click', ()=>{
+      try{
+        const id = formEvent.id.value;
+        const title = formEvent.title.value.trim(); if(!title) return alert('Introduce un título');
+        const start = formEvent.start.value; if(!start) return alert('Introduce fecha inicio');
+        const evObj = {
+          title, type: formEvent.type.value, course: formEvent.course.value || '', start: new Date(formEvent.start.value).toISOString(),
+          end: formEvent.end.value ? new Date(formEvent.end.value).toISOString() : null,
+          desc: formEvent.desc.value, reminder: Number(formEvent.reminder.value) || 0, completed: formEvent.complete.checked
+        };
+        if(id){
+          updateEvent(id, evObj);
+        } else { addEvent(evObj); }
+        modalEvent.hide();
+      }catch(e){ console.error(e); alert('Error guardando evento'); }
+    });
+
+    formEvent.deleteBtn.addEventListener('click', ()=> {
+      const id = formEvent.id.value; if(!id) return;
+      if(confirm('Borrar actividad?')){ deleteEvent(id); modalEvent.hide(); }
+    });
+
+    document.getElementById('save-course-btn').addEventListener('click', ()=>{
+      const id = formCourse.id.value;
+      const name = formCourse.name.value.trim(); if(!name) return alert('Introduce nombre de la materia');
+      const prof = formCourse.prof.value.trim(); const color = formCourse.color.value;
+      if(id){ updateCourse(id, { name, prof, color }); } else { addCourse({ name, prof, color }); }
+      modalCourse.hide();
+    });
+
+    formCourse.deleteBtn.addEventListener('click', ()=> {
+      const id = formCourse.id.value; if(!id) return;
+      if(confirm('Borrar materia? (los eventos asociados se quedarán sin materia)')){ deleteCourse(id); modalCourse.hide(); }
+    });
+
+    /* ---------- Utilities: datetime formats ---------- */
+    function toLocalDatetimeInput(d){
+      const dt = new Date(d);
+      const pad = n => String(n).padStart(2,'0');
+      const yyyy = dt.getFullYear(), mm = pad(dt.getMonth()+1), dd = pad(dt.getDate()), hh = pad(dt.getHours()), min = pad(dt.getMinutes());
+      return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+    }
+
+    /* ---------- Navigation controls ---------- */
+    document.getElementById('prev-btn').addEventListener('click', ()=> {
+      if(view==='month'){ currentDate.setMonth(currentDate.getMonth()-1); }
+      else if(view==='week'){ currentDate.setDate(currentDate.getDate()-7); }
+      else { currentDate.setDate(currentDate.getDate()-1); }
+      renderAll();
+    });
+    document.getElementById('next-btn').addEventListener('click', ()=> {
+      if(view==='month'){ currentDate.setMonth(currentDate.getMonth()+1); }
+      else if(view==='week'){ currentDate.setDate(currentDate.getDate()+7); }
+      else { currentDate.setDate(currentDate.getDate()+1); }
+      renderAll();
+    });
+    document.getElementById('today-btn').addEventListener('click', ()=> { currentDate = new Date(); currentDate.setHours(0,0,0,0); renderAll(); });
+
+    
+    /* view switching */
+    document.querySelectorAll('.view-switch').forEach(el=>{
+      el.addEventListener('click', (ev)=>{
+        ev.preventDefault();
+        document.querySelectorAll('.view-switch').forEach(x=>x.classList.remove('active'));
+        el.classList.add('active');
+        const v = el.dataset.view;
+
+        // 🔧 FIX: cambio de vistas con clase .active para animación
+        Object.values(views).forEach(sec => {
+          sec.classList.remove("active");
+          sec.style.display = "none";
+        });
+        const sel = views[v];
+        sel.style.display = "";
+        setTimeout(() => sel.classList.add("active"), 10);
+
+        view = v;
+        renderAll();
+      });
+    });
+
+    /* search & filters */
+    searchInput.addEventListener('input', ()=> renderAll());
+    filterCourse.addEventListener('change', ()=> renderAll());
+    filterType.addEventListener('change', ()=> renderAll());
+    weekStartSelect.addEventListener('change', ()=> renderAll());
+
+    /* new event / course */
+    document.getElementById('new-event-btn').addEventListener('click', openCreateEventModal);
+    document.getElementById('add-course-btn').addEventListener('click', ()=> openCourseModal());
+    document.getElementById('new-course-btn').addEventListener('click', ()=> openCourseModal());
+
+    /* clear completed tasks */
+    document.getElementById('clear-completed').addEventListener('click', ()=>{
+      if(confirm('Borrar todas las tareas completadas?')) {
+        state.events = state.events.filter(e=> !(e.type==='task' && e.completed));
+        syncState();
+      }
+    });
+
+    /* Export / Import */
+    document.getElementById('export-btn').addEventListener('click', ()=>{
+      const data = JSON.stringify(state, null, 2);
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'planificador_export.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    });
+    document.getElementById('import-btn').addEventListener('click', ()=> document.getElementById('import-file').click());
+    document.getElementById('import-file').addEventListener('change', (e)=>{
+      const f = e.target.files[0]; if(!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try{
+          const imported = JSON.parse(reader.result);
+          if(imported.events && imported.courses){
+            if(confirm('Importar datos y reemplazar los actuales?')) { state = imported; syncState(); }
+          } else { alert('Formato incorrecto'); }
+        }catch(err){ alert('Archivo inválido'); }
+      };
+      reader.readAsText(f);
+    });
+
+    /* notifications: check upcoming events and notify if within reminder minutes */
+    function requestNotificationPermission(){
+      if("Notification" in window && Notification.permission === "default") Notification.requestPermission();
+    }
+    function checkReminders(){
+      const now = Date.now();
+      state.events.forEach(ev=>{
+        if(!ev.reminder) return;
+        const start = new Date(ev.start).getTime();
+        const msBefore = ev.reminder*60*1000;
+        // If within next minute AND not already notified
+        if(start - msBefore <= now + 60000 && start - msBefore > now - 60000){
+          if(Notification.permission === "granted"){
+            new Notification(ev.title, { body: `Empieza a las ${new Date(ev.start).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}` });
+          }
+        }
+      });
+    }
+    // run every 30s while app open
+    setInterval(checkReminders, 30*1000);
+    requestNotificationPermission();
+
+    /* helper: open modal from create on double click */
+    function initDoubleClickQuickAdd(){ /* already wired per-cell */ }
+
+    /* initial render */
+    renderAll();
+
+    /* open event from click in month: delegated */
+    monthGrid.addEventListener('click', (e)=>{
+      const pill = e.target.closest('.event-pill');
+      if(pill) openEventModal(pill.dataset.id);
+    });
+
+    /* open event from week/day: delegated */
+    weekWrapper.addEventListener('click', (e)=>{
+      const w = e.target.closest('.week-event');
+      if(w) openEventModal(w.dataset.id);
+    });
+    timelineBody.addEventListener('click', (e)=>{
+      const w = e.target.closest('.timeline-event');
+      if(w) openEventModal(w.dataset.id);
+    });
+
+    /* delete event/course functions using earlier helpers already bound */
+
+    /* formatting helpers for initial state if none */
+    if(state.courses.length===0 && state.events.length===0){
+      // add an example course (not prefilled in UI) — commented out to remain empty
+      // addCourse({name:'Matemáticas', prof:'Dr. García', color:'#2b8aef'});
+    }
+
+    /* utility: keep UI updated when state changes elsewhere */
+    window.addEventListener('storage', ()=> { state = loadState(); renderAll(); });
+
+    /* small helper: allow keyboard "n" to open new event */
+    window.addEventListener('keydown', (e)=> { if(e.key.toLowerCase()==='n' && (e.ctrlKey||e.metaKey)) { e.preventDefault(); openCreateEventModal(); } });
+
+    /* pass-through: simple debug console */
+    window.__PLANIFICADOR__ = { state, addCourse, addEvent, updateEvent, deleteEvent, syncState };
+
+  })();
+  </script>
+</body>
+</html>

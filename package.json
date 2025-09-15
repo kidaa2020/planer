@@ -1,0 +1,32 @@
+{
+  "name": "planer",
+  "version": "1.0.1",
+  "description": "Planificador Universitario",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^38.1.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.tu.planificador",
+    "win": {
+      "target": "nsis",
+      "icon": "logo.ico"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "TU_USUARIO_GITHUB",
+        "repo": "planer"
+      }
+    ]
+  }
+}
